@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recipe Planner</title>
+  <link rel="stylesheet" href="static/styles.css" />
+  <script>
+    // Add a new row to the ingredients table
+    function addIngredientRow() {
+      const table = document.getElementById('ingredients-table').getElementsByTagName('tbody')[0];
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td><input type="text" name="measurements" /></td>
+        <td><input type="text" name="ingredients" /></td>
+      `;
+      table.appendChild(newRow);
+    }
+
+    // Add a new row to the instructions table
+    function addInstructionRow() {
+      const table = document.getElementById('instructions-table').getElementsByTagName('tbody')[0];
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td><input type="text" name="steps" style="width: 100%;" /></td>
+      `;
+      table.appendChild(newRow);
+    }
+
+    function addGroceryRow() {
+    const table = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+      <td><input type="text" /></td>
+      <td><input type="text" /></td>
+    `;
+    table.appendChild(newRow);
+    }
+    function handleGroceryEnter(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addGroceryRow();
+        // Focus on the new row's first input
+        const newInputs = document.querySelectorAll('#grocery-table input[type="text"]');
+        const lastInput = newInputs[newInputs.length - 3]; // Third to last input (item field of new row)
+        lastInput.focus();
+      }
+    }
+
+    // Handle store selection dropdown
+    function handleStoreSelection(selectElement) {
+      const textInput = selectElement.nextElementSibling;
+      if (selectElement.value === 'Other') {
+        selectElement.style.display = 'none';
+        textInput.style.display = 'block';
+        textInput.focus();
+      }
+    }
+
+    // Save grocery list
+    function saveGroceryList() {
+      const rows = document.querySelectorAll('#grocery-table tbody tr');
+      const groceryList = [];
+
+      rows.forEach(row => {
+        const item = row.cells[0].querySelector('input').value.trim();
+        const quantity = row.cells[1].querySelector('input').value.trim();
+        const storeSelect = row.cells[2].querySelector('select');
+        const storeInput = row.cells[2].querySelector('input[type="text"]');
+        let store = '';
+
+        if (storeSelect.style.display !== 'none') {
+          store = storeSelect.value;
+        } else {
+          store = storeInput.value.trim();
+        }
+
+        if (item || quantity || store) {
+          groceryList.push({ item, quantity, store });
+        }
+      });
+
+      if (groceryList.length === 0) {
+        alert('Please add some items to save the list.');
+        return;
+      }
+
+      const listName = prompt('Enter a name for this grocery list:');
+      if (!listName) return;
+
+      fetch('/save_grocery_list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: listName,
+          items: groceryList
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Grocery list saved successfully!');
+        } else {
+          alert('Error saving grocery list.');
+        }
+      });
+    }
+
+    // View saved grocery lists
+    function viewGroceryLists() {
+      fetch('/get_grocery_lists')
+      .then(response => response.json())
+      .then(data => {
+        const container = document.getElementById('lists-container');
+        const savedListsDiv = document.getElementById('saved-lists');
+
+        if (data.lists.length === 0) {
+          container.innerHTML = '<p>No saved lists found.</p>';
+        } else {
+          container.innerHTML = data.lists.map(list => `
+            <div style="border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px;">
+              <h4>${list.name}</h4>
+              <ul>
+                ${list.items.map(item => `
+                  <li>${item.item} - ${item.quantity} ${item.store ? `(${item.store})` : ''}</li>
+                `).join('')}
+              </ul>
+              <button onclick="loadGroceryList('${list.name}')" style="margin-top: 10px;">Load List</button>
+            </div>
+          `).join('');
+        }
+
+        savedListsDiv.style.display = savedListsDiv.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+
+    // Load a saved grocery list
+    function loadGroceryList(listName) {
+      fetch('/get_grocery_lists')
+      .then(response => response.json())
+      .then(data => {
+        const list = data.lists.find(l => l.name === listName);
+        if (list) {
+          // Clear current table
+          const tbody = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
+          tbody.innerHTML = '';
+
+          // Add items from saved list
+          list.items.forEach((item, index) => {
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+              <td><input type="text" value="${item.item}" onkeypress="handleGroceryEnter(event)" /></td>
+              <td><input type="text" value="${item.quantity}" onkeypress="handleGroceryEnter(event)" /></td>
+              <td>
+                <select onchange="handleStoreSelection(this)" onkeypress="handleGroceryEnter(event)">
+                  <option value="">Select store...</option>
+                  <option value="Costco" ${item.store === 'Costco' ? 'selected' : ''}>Costco</option>
+                  <option value="Walmart" ${item.store === 'Walmart' ? 'selected' : ''}>Walmart</option>
+                  <option value="WinCo" ${item.store === 'WinCo' ? 'selected' : ''}>WinCo</option>
+                  <option value="Target" ${item.store === 'Target' ? 'selected' : ''}>Target</option>
+                  <option value="Sam's Club" ${item.store === "Sam's Club" ? 'selected' : ''}>Sam's Club</option>
+                  <option value="Other" ${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club"].includes(item.store) && item.store ? 'selected' : ''}>Other</option>
+                </select>
+                <input type="text" style="display: ${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club", ''].includes(item.store) ? 'block' : 'none'};" value="${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club", ''].includes(item.store) ? item.store : ''}" placeholder="Enter store name" onkeypress="handleGroceryEnter(event)" />
+              </td>
+            `;
+            tbody.appendChild(newRow);
+          });
+
+          alert('Grocery list loaded successfully!');
+        }
+      });
+    }
+
+    // Highlight active sidebar link
+    document.addEventListener('DOMContentLoaded', () => {
+      const sidebarLinks = document.querySelectorAll('.sidebar a');
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          sidebarLinks.forEach(a => a.classList.remove('active'));
+          link.classList.add('active');
+        });
+      });
+    });
+
+
+    // Calculate number of steps before submitting the form
+    function calculateSteps() {
+      const stepInputs = document.querySelectorAll('input[name="steps"]');
+      let filledSteps = 0;
+
+      stepInputs.forEach(input => {
+        if (input.value.trim() !== '') {
+          filledSteps++;
+        }
+      });
+
+      const numSteps = filledSteps > 0 ? filledSteps : 1;
+      document.getElementById('numOfSteps').value = numSteps;
+    }
+    // Toggle recipe details visibility
+    function toggleRecipe(id, button) {
+      const section = document.getElementById(id);
+      section.classList.toggle('hidden');
+
+      // Toggle button text
+      if (section.classList.contains('hidden')) {
+        button.textContent = 'Show more';
+      } else {
+        button.textContent = 'Show less';
+      }
+    }
+
+    // Flip card function
+    function flipCard(cardId) {
+      const cardInner = document.getElementById('card-inner-' + cardId);
+      cardInner.parentElement.classList.toggle('flipped');
+    }
+
+    // Toggle day selection and show meal buttons
+    function toggleDay(dayId, button, cardId) {
+      // Hide all meal buttons for this card
+      const allMealButtons = document.querySelectorAll(`[id*="-${cardId}"].meal-buttons`);
+      allMealButtons.forEach(btn => btn.style.display = 'none');
+      
+      // Remove active class from all day buttons for this card
+      const cardBack = button.parentElement;
+      const allDayButtons = cardBack.querySelectorAll('.day-button');
+      allDayButtons.forEach(btn => btn.classList.remove('active'));
+      
+      // Show selected day's meal buttons and make day button active
+      const selectedMealButtons = document.getElementById(dayId);
+      selectedMealButtons.style.display = 'block';
+      button.classList.add('active');
+    }
+
+    // Add a new row to the grocery table
+    function addGroceryRow() {
+      const table = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td><input type="text" onkeypress="handleGroceryEnter(event)" /></td>
+        <td><input type="text" onkeypress="handleGroceryEnter(event)" /></td>
+      `;
+      table.appendChild(newRow);
+    }
+
+    // Handle Enter key press in grocery inputs
+    function handleGroceryEnter(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addGroceryRow();
+        // Focus on the new row's first input
+        const newInputs = document.querySelectorAll('#grocery-table input');
+        const lastInput = newInputs[newInputs.length - 2]; // Second to last input (item field of new row)
+        lastInput.focus();
+      }
+    }
+
+    // Highlight active sidebar link
+    document.addEventListener('DOMContentLoaded', () => {
+      const sidebarLinks = document.querySelectorAll('.sidebar a');
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          sidebarLinks.forEach(a => a.classList.remove('active'));
+          link.classList.add('active');
+        });
+      });
+    });
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>My Recipe Planner</h1>
+    </header>
+
+    <div class="main">
+      <!--Sidebar Navigation-->
+      <nav class="sidebar">
+        <a href="#input">Input Recipes</a>
+        <a href="#view">View Recipes</a>
+        
+        <a href="#meal">Meal Plan</a>
+        <a href="#grocery">Grocery List</a>
+      </nav>
+
+      <!--Content Area-->
+      <section class="content">
+
+        <!--Input Recipes-->
+        <div id="input" class="section">
+          <h2>Input Recipes</h2>
+                    <form action = "/submit" method = "post" onsubmit = "calculateSteps()">
+            <label for="name">Recipe Name:</label><br />
+            <input type="text" name = "name" required><br /><br />
+
+
+            <table id="ingredients-table" style="width: 100%; margin-bottom: 15px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;">Measurement</th>
+                  <th style="text-align:left;">Ingredient</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><input type="text" name = "measurements" placeholder="e.g., 2 cups" /></td><td><input type="text" name = "ingredients" placeholder="e.g., Flour" /></td></tr>
+                <tr><td><input type="text" name = "measurements" /></td><td><input type="text" name = "ingredients"" /></td></tr>
+                <tr><td><input type="text" name = "measurements" /></td><td><input type="text" name = "ingredients" /></td></tr>
+              </tbody>
+            </table>
+            <button type="button" onclick="addIngredientRow()">Add Row</button><br /><br />
+
+            <label>Instructions:</label><br />
+            <table id="instructions-table" style="width: 100%; margin-bottom: 15px;">
+              <tbody>
+                <tr><td><input type="text" name = "steps" placeholder="e.g., Preheat oven to 350°F" style="width: 100%;" /></td></tr>
+              </tbody>
+            </table>
+            <button type="button" onclick="addInstructionRow()">Add Instruction Row</button><br /><br />
+            <label for="mealType">Recipe Type:</label><br />
+              <select name="mealType" required>
+                <option value="">Select a type...</option>
+                <option value="Breakfast">Breakfast</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Dinner">Dinner</option>
+                <option value="Dessert">Dessert</option>
+                <option value="Snack">Snack</option>
+                <option value="Side Dish">Side Dish</option>
+              </select><br /><br />
+
+              <label for="description">Description:</label><br />
+              <textarea name="description" placeholder="Brief description of the recipe"></textarea><br /><br />
+
+              <label for="servings">Servings:</label><br />
+              <input type="number" name="servings" placeholder="4" min="1"><br /><br />
+
+              <label for="time">Total Cook Time:</label><br />
+              <input type="text" name="time" placeholder="e.g., 30 minutes"><br /><br />
+
+              <label for="notes">Notes:</label><br />
+              <textarea name="notes" placeholder="Any additional notes"></textarea><br /><br />
+
+              <label for="freezerMealTF">Freezer Meal?</label><br />
+              <select name="freezerMealTF">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select><br /><br />
+
+              <input type="hidden" name="numOfSteps" id="numOfSteps" value="1">
+
+
+            <button type="submit" >Add Recipe</button>
+          </form>
+        </div>
+
+        <!--View Recipes-->
+        <div id="view" class="section">
+          <h2>View Recipes</h2>
+          <p>This is where you can browse and filter all your saved recipes.</p><br />
+
+          <div class="recipe-cards-container">
+            {% for i in range(recipes.shape[0]) %}
+            <div class="recipe-card" onclick="flipCard({{ i }})">
+              <div class="card-inner" id="card-inner-{{ i }}">
+                <div class="card-front">
+                  <div class="recipe-content">
+                    <h3>{{ recipes['name'][i] }}</h3>
+                    <p><strong>Description:</strong> {{ recipes['description'][i] }}</p>
+                    <p><strong>Type:</strong> {{ recipes['mealType'][i] }}</p>
+                    <p><strong>Servings:</strong> {{ recipes['servings'][i] }}</p>
+                    <p><strong>Cook Time:</strong> {{ recipes['time'][i] }}</p>
+                    <p><strong>Freezer Meal:</strong> {{ recipes['freezerMealTF'][i] }}</p>
+                    
+                    <button class="toggle-btn" onclick="event.stopPropagation(); toggleRecipe('recipe-{{ i }}', this)">Show more</button>
+
+                    <div id="recipe-{{ i }}" class="recipe-details hidden">
+                      <h4>Ingredients:</h4>
+                      <ul>
+                        {% for ing, meas in zip(recipes['ingredients'][i], recipes['measurements'][i]) %}
+                          <li>{{ meas }} – {{ ing }}</li>
+                        {% endfor %}
+                      </ul>
+
+                      <h4>Instructions:</h4>
+                      <ol>
+                        {% for step in recipes['steps'][i] %}
+                          <li>{{ step }}</li>
+                        {% endfor %}
+                      </ol>
+
+                      {% if recipes['notes'][i] %}
+                        <p><strong>Notes:</strong> {{ recipes['notes'][i] }}</p>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card-back">
+                  <h3>What day do you want this recipe?</h3>
+                  <div class="days-container">
+                    <form action = "/planner" method = "post" style="display: contents;">
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('monday-{{ i }}', this, {{ i }})">Monday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('tuesday-{{ i }}', this, {{ i }})">Tuesday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('wednesday-{{ i }}', this, {{ i }})">Wednesday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('thursday-{{ i }}', this, {{ i }})">Thursday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('friday-{{ i }}', this, {{ i }})">Friday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('saturday-{{ i }}', this, {{ i }})">Saturday</button>
+                      <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('sunday-{{ i }}', this, {{ i }})">Sunday</button>
+                    </form>
+                  </div>
+                  
+                  <div id="monday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Monday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="tuesday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Tuesday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="wednesday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Wednesday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="thursday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Thursday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="friday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Friday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="saturday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Saturday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                  
+                  <div id="sunday-{{ i }}" class="meal-buttons" style="display: none;">
+                    <form action="/planner" method="post">
+                      <input type="hidden" name="day" value="Sunday">
+                      <input type="hidden" name="recipe" value="{{ recipes['name'][i] }}">
+                      <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
+                      <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
+                      <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      
+
+        <!--Meal Plan-->
+        <div id="meal" class="section">
+          <h2>Weekly Meal Plan</h2>
+          <p>Go to the "View Recipes" section to add meals to your weekly plan."</p>
+
+          <table class="meal-calendar">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Breakfast</th>
+                <th>Lunch</th>
+                <th>Dinner</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
+              <tr>
+                <td>{{ day.capitalize() }}</td>
+                <td>{{ meal_plan[day][0] }}</td>
+                <td>{{ meal_plan[day][1] }}</td>
+                <td>{{ meal_plan[day][2] }}</td>
+                <td>
+                  <form action="/clear_day" method="post" style="display:inline;">
+                    <input type="hidden" name="day" value="{{ day }}">
+                    <button type="submit">Clear</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <form action = "/reset_week" method="post" style="display: inline;">
+            <form action="/reset_week" method="post" style="display:inline;">
+                <button type="submit">Reset Week</button>
+            </form>
+
+          </form>
+        </div>
+
+            <!--Grocery List-->
+                <div id="grocery" class="section">
+          <h2>Grocery List</h2>
+          <form action="/add_grocery" method="post">
+            <table id="grocery-table" style="width: 100%; margin-bottom: 15px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;">Item</th>
+                  <th style="text-align:left;">Quantity</th>
+                  <th style="text-align:left;">Store</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="text" name="item" placeholder="e.g., Eggs" onkeypress="handleGroceryEnter(event)" /></td>
+                  <td><input type="text" name="amount" placeholder="e.g., 1 dozen" onkeypress="handleGroceryEnter(event)" /></td>
+                  <td>
+                    <select onchange="handleStoreSelection(this)" onkeypress="handleGroceryEnter(event)">
+                      <option value="">Select store...</option>
+                      <option value="Costco">Costco</option>
+                      <option value="Walmart">Walmart</option>
+                      <option value="WinCo">WinCo</option>
+                      <option value="Target">Target</option>
+                      <option value="Sam's Club">Sam's Club</option>
+                      <option value="Raley's">Raley's</option>
+                      <option value="Safeway">Safeway</option>
+                      <option value="Trader Joe's">Trader Joe's</option>
+                      <option value="Whole Foods">Whole Foods</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <input type="text" name="store" style="display: none;" placeholder="Enter store name" onkeypress="handleGroceryEnter(event)" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <div style="margin-bottom: 20px;">
+              <button type="button" onclick="saveGroceryList()">Save List</button>
+              <button type="button" onclick="viewGroceryLists()">View Lists</button>
+            </div>
+
+          </form>
+          
+          <div id="saved-lists" style="display: none;">
+            <h3>Saved Grocery Lists</h3>
+            <div id="lists-container"></div>
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <footer>
+      <p>© 2025 Recipe Planner App. All rights reserved.</p>
+    </footer>
+  </div>
+</body>
+</html>

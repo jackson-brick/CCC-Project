@@ -1,0 +1,33 @@
+[project]
+name = "python-template"
+version = "0.1.0"
+description = "Recipe Organizer and Grocery Planner"
+authors = ["Jackson Brick <jacksond.brick@gmail.com>"]
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.1.1",
+    "replit>=4.1.1",
+]
+
+[general]
+host = "0.0.0.0"
+port = 8080
+root = "./"
+
+log-level = "error"
+log-remote-access = false
+
+directory-listing = false
+cache-control-headers = false
+
+cors-allow-origins = "*"
+index-files = "index.html"
+
+[advanced]
+
+[[advanced.headers]]
+source = "**"
+[advanced.headers.headers]
+Cache-Control = "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+Pragma = "no-cache"
+Expires = "0"
