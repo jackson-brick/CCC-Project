@@ -359,7 +359,7 @@
         <!--View Recipes-->
         <div id="view" class="section">
           <h2>View Recipes</h2>
-          <p>This is where you can browse and filter all your saved recipes.</p><br />
+          <p>This is where you can browse and filter all your saved recipes. Click on a card to flip it and add it to your meal plan!</p><br />
 
           <div class="recipe-cards-container">
             {% for i in range(recipes.shape[0]) %}
@@ -419,6 +419,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -429,6 +432,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -439,6 +445,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -449,6 +458,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -459,6 +471,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -469,6 +484,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                   
@@ -479,6 +497,9 @@
                       <button type="submit" name="meal" value="breakfast" onclick="event.stopPropagation();">Breakfast</button>
                       <button type="submit" name="meal" value="lunch" onclick="event.stopPropagation();">Lunch</button>
                       <button type="submit" name="meal" value="dinner" onclick="event.stopPropagation();">Dinner</button>
+                      <button type="submit" name="meal" value="side dish" onclick="event.stopPropagation();">Side Dish</button>
+                      <button type="submit" name="meal" value="dessert" onclick="event.stopPropagation();">Dessert</button>
+                      <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
                 </div>
@@ -492,15 +513,18 @@
         <!--Meal Plan-->
         <div id="meal" class="section">
           <h2>Weekly Meal Plan</h2>
-          <p>Go to the "View Recipes" section to add meals to your weekly plan."</p>
+          <p>Go to the "View Recipes" section to add meals to your weekly plan.</p>
 
-          <table class="meal-calendar">
+          <table class="meal-calendar" style="width:140%">
             <thead>
               <tr>
-                <th>Day</th>
+                <th style="width:20%">Day</th>
                 <th>Breakfast</th>
                 <th>Lunch</th>
                 <th>Dinner</th>
+                <th>Side Dish</th>
+                <th>Dessert</th>
+                <th>Snack</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -511,6 +535,9 @@
                 <td>{{ meal_plan[day][0] }}</td>
                 <td>{{ meal_plan[day][1] }}</td>
                 <td>{{ meal_plan[day][2] }}</td>
+                <td>{{ meal_plan[day][3] }}</td>
+                <td>{{ meal_plan[day][4] }}</td>
+                <td>{{ meal_plan[day][5] }}</td>
                 <td>
                   <form action="/clear_day" method="post" style="display:inline;">
                     <input type="hidden" name="day" value="{{ day }}">
