@@ -5,7 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Recipe Planner</title>
   <link rel="stylesheet" href="static/styles.css" />
+  <link href='https://fonts.googleapis.com/css?family=Open Sans' rel='stylesheet'>
   <script>
+    // Highlight active sidebar link
+    document.addEventListener('DOMContentLoaded', () => {
+      renderSuggestions();
+      const sidebarLinks = document.querySelectorAll('.sidebar a');
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          sidebarLinks.forEach(a => a.classList.remove('active'));
+          link.classList.add('active');
+        });
+      });
+    });
     // Add a new row to the ingredients table
     function addIngredientRow() {
       const table = document.getElementById('ingredients-table').getElementsByTagName('tbody')[0];
@@ -28,23 +40,68 @@
     }
 
     function addGroceryRow() {
-    const table = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
-    const newRow = document.createElement('tr');
-    newRow.innerHTML = `
-      <td><input type="text" /></td>
-      <td><input type="text" /></td>
-    `;
-    table.appendChild(newRow);
+      const tableBody = document.querySelector('#grocery-table tbody');
+      const row = document.createElement('tr');
+
+      // Item
+      const itemCell = document.createElement('td');
+      const itemInput = document.createElement('input');
+      itemInput.type = 'text';
+      itemInput.name = 'item';
+      itemInput.placeholder = 'e.g., Eggs';
+      itemCell.appendChild(itemInput);
+      row.appendChild(itemCell);
+
+      // Amount
+      const amtCell = document.createElement('td');
+      const amtInput = document.createElement('input');
+      amtInput.type = 'text';
+      amtInput.name = 'amount';
+      amtInput.placeholder = 'e.g., 1 dozen';
+      amtCell.appendChild(amtInput);
+      row.appendChild(amtCell);
+
+      // Store
+      const storeCell = document.createElement('td');
+      const storeSelect = document.createElement('select');
+      storeSelect.name = 'store_select';
+      ['','Costco','Walmart','WinCo','Target',"Sam's Club",'Raley\'s','Safeway',"Trader Joe's",'Whole Foods','Other'].forEach(store => {
+        const opt = document.createElement('option');
+        opt.value = store;
+        opt.textContent = store || 'Select store...';
+        storeSelect.appendChild(opt);
+      });
+      storeCell.appendChild(storeSelect);
+      row.appendChild(storeCell);
+
+      // Type
+      const typeCell = document.createElement('td');
+      const typeSelect = document.createElement('select');
+      typeSelect.name = 'type_select';
+      ['','Produce','Meat','Dairy','Bakery','Frozen','Canned','Pantry','Beverages','Other'].forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type || 'Select type...';
+        typeSelect.appendChild(opt);
+      });
+      typeCell.appendChild(typeSelect);
+      row.appendChild(typeCell);
+
+      // Remove button
+      const removeCell = document.createElement('td');
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-row-btn';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = () => row.remove();
+      removeCell.appendChild(removeBtn);
+      row.appendChild(removeCell);
+
+      tableBody.appendChild(row);
     }
-    function handleGroceryEnter(event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        addGroceryRow();
-        // Focus on the new row's first input
-        const newInputs = document.querySelectorAll('#grocery-table input[type="text"]');
-        const lastInput = newInputs[newInputs.length - 3]; // Third to last input (item field of new row)
-        lastInput.focus();
-      }
+    function removeGroceryRow(button) {
+      const row = button.closest('tr');
+      if (row) row.remove();
     }
 
     // Handle store selection dropdown
@@ -57,133 +114,92 @@
       }
     }
 
-    // Save grocery list
-    function saveGroceryList() {
-      const rows = document.querySelectorAll('#grocery-table tbody tr');
-      const groceryList = [];
-
-      rows.forEach(row => {
-        const item = row.cells[0].querySelector('input').value.trim();
-        const quantity = row.cells[1].querySelector('input').value.trim();
-        const storeSelect = row.cells[2].querySelector('select');
-        const storeInput = row.cells[2].querySelector('input[type="text"]');
-        let store = '';
-
-        if (storeSelect.style.display !== 'none') {
-          store = storeSelect.value;
-        } else {
-          store = storeInput.value.trim();
-        }
-
-        if (item || quantity || store) {
-          groceryList.push({ item, quantity, store });
-        }
-      });
-
-      if (groceryList.length === 0) {
-        alert('Please add some items to save the list.');
-        return;
+    // Handle type selection dropdown
+    function handleTypeSelection(selectElement) {
+      const textInput = selectElement.nextElementSibling;
+      if (selectElement.value === 'Other') {
+        selectElement.style.display = 'none';
+        textInput.style.display = 'block';
+        textInput.focus();
       }
-
-      const listName = prompt('Enter a name for this grocery list:');
-      if (!listName) return;
-
-      fetch('/save_grocery_list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: listName,
-          items: groceryList
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          alert('Grocery list saved successfully!');
-        } else {
-          alert('Error saving grocery list.');
-        }
-      });
     }
 
-    // View saved grocery lists
-    function viewGroceryLists() {
+    
+    function renderGroupedGroceryList(list, groupBy = 'type') {
+      const grouped = {};
+      const otherItems = [];
+      const itemIndexMap = new Map(); // Track original indices
+
+      list.forEach((item, originalIndex) => {
+        const key = item[groupBy] || 'Uncategorized';
+        
+        // Check if this item has a custom "Other" value
+        const isCustomOther = (groupBy === 'type' && item.type && 
+                              !['Produce', 'Meat', 'Dairy', 'Bakery', 'Frozen', 'Canned', 'Pantry', 'Beverages'].includes(item.type)) ||
+                             (groupBy === 'store' && item.store && 
+                              !['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club", "Raley's", 'Safeway', "Trader Joe's", 'Whole Foods'].includes(item.store));
+        
+        const itemWithIndex = { ...item, originalIndex };
+        
+        if (isCustomOther) {
+          otherItems.push(itemWithIndex);
+        } else {
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(itemWithIndex);
+        }
+      });
+
+      // Add "Other" group if there are custom items
+      if (otherItems.length > 0) {
+        grouped['Other'] = otherItems;
+      }
+
+      const container = document.getElementById('lists-container');
+      container.innerHTML = Object.entries(grouped).map(([group, items]) => `
+        <div style="border: 1px solid #ccc; margin: 10px 0; padding: 10px; border-radius: 5px; background-color: var(--panel);">
+          <h4 style="color: var(--primary); margin-bottom: 10px;">${group}</h4>
+          <ul style="margin: 0; padding-left: 20px;">
+            ${items.map(i => {
+              const customValue = group === 'Other' ? (groupBy === 'type' ? i.type : i.store) : '';
+              const displayText = customValue ? ` (${customValue})` : '';
+              const storeInfo = groupBy !== 'store' && i.store ? ` (${i.store})` : '';
+              return `<li style="margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <span>${i.item}${displayText} - ${i.amount || 'No quantity'}${storeInfo}</span>
+                <form action="/delete_grocery_item" method="post" style="margin: 0;">
+                  <input type="hidden" name="item_index" value="${i.originalIndex}">
+                  <button type="submit" style="background: #ff4444; color: white; border: none; border-radius: 3px; padding: 2px 6px; cursor: pointer; font-size: 12px;">X</button>
+                </form>
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>
+      `).join('');
+    }
+
+    // Load and display grocery lists automatically
+    function loadGroceryLists() {
       fetch('/get_grocery_lists')
       .then(response => response.json())
       .then(data => {
         const container = document.getElementById('lists-container');
-        const savedListsDiv = document.getElementById('saved-lists');
 
-        if (data.lists.length === 0) {
-          container.innerHTML = '<p>No saved lists found.</p>';
+        if (data.lists.length === 0 || data.lists[0].items.length === 0) {
+          container.innerHTML = '<p>No items in your grocery list yet.</p>';
         } else {
-          container.innerHTML = data.lists.map(list => `
-            <div style="border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px;">
-              <h4>${list.name}</h4>
-              <ul>
-                ${list.items.map(item => `
-                  <li>${item.item} - ${item.quantity} ${item.store ? `(${item.store})` : ''}</li>
-                `).join('')}
-              </ul>
-              <button onclick="loadGroceryList('${list.name}')" style="margin-top: 10px;">Load List</button>
-            </div>
-          `).join('');
-        }
-
-        savedListsDiv.style.display = savedListsDiv.style.display === 'none' ? 'block' : 'none';
-      });
-    }
-
-    // Load a saved grocery list
-    function loadGroceryList(listName) {
-      fetch('/get_grocery_lists')
-      .then(response => response.json())
-      .then(data => {
-        const list = data.lists.find(l => l.name === listName);
-        if (list) {
-          // Clear current table
-          const tbody = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
-          tbody.innerHTML = '';
-
-          // Add items from saved list
-          list.items.forEach((item, index) => {
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-              <td><input type="text" value="${item.item}" onkeypress="handleGroceryEnter(event)" /></td>
-              <td><input type="text" value="${item.quantity}" onkeypress="handleGroceryEnter(event)" /></td>
-              <td>
-                <select onchange="handleStoreSelection(this)" onkeypress="handleGroceryEnter(event)">
-                  <option value="">Select store...</option>
-                  <option value="Costco" ${item.store === 'Costco' ? 'selected' : ''}>Costco</option>
-                  <option value="Walmart" ${item.store === 'Walmart' ? 'selected' : ''}>Walmart</option>
-                  <option value="WinCo" ${item.store === 'WinCo' ? 'selected' : ''}>WinCo</option>
-                  <option value="Target" ${item.store === 'Target' ? 'selected' : ''}>Target</option>
-                  <option value="Sam's Club" ${item.store === "Sam's Club" ? 'selected' : ''}>Sam's Club</option>
-                  <option value="Other" ${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club"].includes(item.store) && item.store ? 'selected' : ''}>Other</option>
-                </select>
-                <input type="text" style="display: ${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club", ''].includes(item.store) ? 'block' : 'none'};" value="${!['Costco', 'Walmart', 'WinCo', 'Target', "Sam's Club", ''].includes(item.store) ? item.store : ''}" placeholder="Enter store name" onkeypress="handleGroceryEnter(event)" />
-              </td>
-            `;
-            tbody.appendChild(newRow);
-          });
-
-          alert('Grocery list loaded successfully!');
+          // Use the selected grouping option
+          const groupBy = document.querySelector('input[name="displayGroupOption"]:checked').value;
+          renderGroupedGroceryList(data.lists[0].items, groupBy);
         }
       });
     }
+    
+    function renderGrouping() {
+      loadGroceryLists();
+    }
 
-    // Highlight active sidebar link
-    document.addEventListener('DOMContentLoaded', () => {
-      const sidebarLinks = document.querySelectorAll('.sidebar a');
-      sidebarLinks.forEach(link => {
-        link.addEventListener('click', () => {
-          sidebarLinks.forEach(a => a.classList.remove('active'));
-          link.classList.add('active');
-        });
-      });
-    });
+    
+
+    
 
 
     // Calculate number of steps before submitting the form
@@ -201,15 +217,38 @@
       document.getElementById('numOfSteps').value = numSteps;
     }
     // Toggle recipe details visibility
-    function toggleRecipe(id, button) {
-      const section = document.getElementById(id);
-      section.classList.toggle('hidden');
+    function toggleRecipe(recipeId, button) {
+      const recipeDetails = document.getElementById(recipeId);
+      const index = recipeId.split('-')[1]; // Extract index from recipeId
+      const editForm = document.getElementById(`edit-form-${index}`);
+      const editBtn = document.querySelector(`button[onclick="event.stopPropagation(); toggleEditForm(${index})"]`);
 
-      // Toggle button text
-      if (section.classList.contains('hidden')) {
-        button.textContent = 'Show more';
-      } else {
+      if (recipeDetails.classList.contains('hidden')) {
+        // Close edit form if it's open
+        if (!editForm.classList.contains('hidden')) {
+          editForm.classList.add('hidden');
+          editBtn.textContent = 'Edit';
+        }
+        // Open recipe details
+        recipeDetails.classList.remove('hidden');
         button.textContent = 'Show less';
+      } else {
+        recipeDetails.classList.add('hidden');
+        button.textContent = 'Show more';
+      }
+    }
+
+    function toggleSuggestions() {
+      const container = document.getElementById('suggestions-container');
+      const btn = document.getElementById('toggle-suggestions-btn');
+
+      if (container.style.display === 'none' || container.style.display === '') {
+        container.style.display = 'block';
+        btn.textContent = 'Hide Suggestions';
+        renderSuggestions();  // Render suggestions when showing
+      } else {
+        container.style.display = 'none';
+        btn.textContent = 'Show Suggestions';
       }
     }
 
@@ -224,43 +263,650 @@
       // Hide all meal buttons for this card
       const allMealButtons = document.querySelectorAll(`[id*="-${cardId}"].meal-buttons`);
       allMealButtons.forEach(btn => btn.style.display = 'none');
-      
+
       // Remove active class from all day buttons for this card
       const cardBack = button.parentElement;
       const allDayButtons = cardBack.querySelectorAll('.day-button');
       allDayButtons.forEach(btn => btn.classList.remove('active'));
-      
+
       // Show selected day's meal buttons and make day button active
       const selectedMealButtons = document.getElementById(dayId);
       selectedMealButtons.style.display = 'block';
       button.classList.add('active');
     }
 
-    // Add a new row to the grocery table
-    function addGroceryRow() {
-      const table = document.getElementById('grocery-table').getElementsByTagName('tbody')[0];
-      const newRow = document.createElement('tr');
-      newRow.innerHTML = `
-        <td><input type="text" onkeypress="handleGroceryEnter(event)" /></td>
-        <td><input type="text" onkeypress="handleGroceryEnter(event)" /></td>
-      `;
-      table.appendChild(newRow);
+    function toggleEditForm(index) {
+      const editForm = document.getElementById(`edit-form-${index}`);
+      const recipeDetails = document.getElementById(`recipe-${index}`);
+      const editBtn = document.querySelector(`button[onclick="event.stopPropagation(); toggleEditForm(${index})"]`);
+      const showBtn = document.querySelector(`button[onclick="event.stopPropagation(); toggleRecipe('recipe-${index}', this)"]`);
+
+      if (editForm.classList.contains('hidden')) {
+        // Close recipe details if it's open
+        if (!recipeDetails.classList.contains('hidden')) {
+          recipeDetails.classList.add('hidden');
+          showBtn.textContent = 'Show more';
+        }
+        // Open edit form
+        editForm.classList.remove('hidden');
+        editBtn.textContent = 'Cancel Edit';
+      } else {
+        editForm.classList.add('hidden');
+        editBtn.textContent = 'Edit';
+      }
     }
 
-    // Handle Enter key press in grocery inputs
-    function handleGroceryEnter(event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        addGroceryRow();
-        // Focus on the new row's first input
-        const newInputs = document.querySelectorAll('#grocery-table input');
-        const lastInput = newInputs[newInputs.length - 2]; // Second to last input (item field of new row)
-        lastInput.focus();
+    function addIngredient(index) {
+      const container = document.getElementById('ingredients-container-' + index);
+      const div = document.createElement('div');
+      div.className = 'inline-inputs';
+      div.style.marginBottom = '5px';
+      div.innerHTML = `
+        <input type="text" name="ingredients" placeholder="Ingredient" required style="width: 45%; margin-right: 5px;" />
+        <input type="text" name="measurements" placeholder="Measurement" required style="width: 45%;" />
+        <button type="button" onclick="removeIngredient(this)">X</button>
+      `;
+      container.appendChild(div);
+    }
+
+    function removeIngredient(button) {
+      button.parentElement.remove();
+    }
+
+    function addStep(index) {
+      const container = document.getElementById('steps-container-' + index);
+      const div = document.createElement('div');
+      div.className = 'list-item';
+      div.style.marginBottom = '5px';
+      div.innerHTML = `
+        <textarea name="steps" rows="2" required style="width: 90%;"></textarea>
+        <button type="button" onclick="removeStep(this)">X</button>
+      `;
+      container.appendChild(div);
+    }
+
+    function removeStep(button) {
+      button.parentElement.remove();
+    }
+
+    function validateEditForm(index) {
+      // Optional: add validation if needed
+      return true;
+    }
+
+    function enableSubmit(index) {
+      const submitButton = document.getElementById(`submit-rating-${index}`);
+      submitButton.disabled = false;
+      submitButton.classList.add('enabled');
+    }
+    
+    function applyRecipeFilters() {
+      const mealType = document.getElementById('filter-meal-type').value.toLowerCase();
+      const freezer = document.getElementById('filter-freezer').value.toLowerCase();
+      const maxTime = parseInt(document.getElementById('filter-time').value);
+
+      const cards = document.querySelectorAll('.recipe-card');
+
+      cards.forEach(card => {
+        const type = card.dataset.mealType;
+        const freezerTF = card.dataset.freezer;
+        const cookTime = parseInt(card.dataset.cookTime);
+
+        const matchesMeal = !mealType || type === mealType;
+        const matchesFreezer = !freezer || freezerTF === freezer;
+        const matchesTime = isNaN(maxTime) || cookTime <= maxTime;
+
+        card.style.display = (matchesMeal && matchesFreezer && matchesTime) ? 'block' : 'none';
+      });
+    }
+    function importRecipe() {
+      const url = document.getElementById('import-url').value.trim();
+      if (!url) {
+        alert("Please enter a valid URL.");
+        return;
       }
+
+      fetch('/scrape_url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url: url })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          alert("Failed to scrape recipe: " + data.error);
+          return;
+        }
+
+        // Fill form fields with scraped data
+        document.querySelector('input[name="name"]').value = data.name || '';
+        document.querySelector('textarea[name="description"]').value = data.description || '';
+        document.querySelector('input[name="servings"]').value = data.servings || 1;
+        document.querySelector('input[name="time"]').value = data.time || '';
+        document.querySelector('textarea[name="notes"]').value = data.notes || '';
+        document.querySelector('select[name="freezerMealTF"]').value = data.freezerMealTF || 'No';
+
+        // Set ingredients and measurements
+        const ingredientsTable = document.getElementById('ingredients-table').getElementsByTagName('tbody')[0];
+        ingredientsTable.innerHTML = ''; // Clear old rows
+        for (let i = 0; i < data.ingredients.length; i++) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><input type="text" name="measurements" value="${data.measurements[i] || ''}" /></td>
+            <td><input type="text" name="ingredients" value="${data.ingredients[i] || ''}" /></td>
+          `;
+          ingredientsTable.appendChild(row);
+        }
+
+        // Set instructions
+        const instructionsTable = document.getElementById('instructions-table').getElementsByTagName('tbody')[0];
+        instructionsTable.innerHTML = ''; // Clear old steps
+        for (let step of data.steps) {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td><input type="text" name="steps" value="${step}" style="width: 100%;" /></td>`;
+          instructionsTable.appendChild(row);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error importing recipe.");
+      });
+    }
+
+    function parseMeasurementParts(meas) {
+      // Matches numbers like: "1 1/2", "1/2", "2.5", "3"
+      const match = meas.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(\.\d+)?)/);
+      if (!match) return { amount: null, unit: meas };  // No number, return whole string as unit
+      const numberPart = match[0];
+      const rest = meas.slice(numberPart.length).trim();  // The rest (units)
+
+      let value;
+      if (numberPart.includes('/')) {
+        // Fractional value (like "1 1/2" or "1/2")
+        if (numberPart.includes(' ')) {
+          const [whole, frac] = numberPart.split(' ');
+          const [num, den] = frac.split('/');
+          value = parseInt(whole) + parseInt(num) / parseInt(den);
+        } else {
+          const [num, den] = numberPart.split('/');
+          value = parseInt(num) / parseInt(den);
+        }
+      } else {
+        // Decimal or integer value
+        value = parseFloat(numberPart);
+      }
+
+      return { amount: value, unit: rest };
+    }
+
+    function scaleRecipe(index) {
+      const scaleInput = document.getElementById(`scale-factor-${index}`);
+      let scale = parseFloat(scaleInput.value);
+      if (isNaN(scale) || scale < 0.5 || scale > 100) {
+        alert("Please enter a scale factor between 0.5 and 100.");
+        return;
+      }
+
+      // Scale servings
+      const servingsEl = document.getElementById(`servings-${index}`);
+      const originalServings = parseFloat(servingsEl.dataset.originalServings);
+      servingsEl.textContent = Math.round(originalServings * scale * 100) / 100;
+
+      // Scale ingredients
+      const detailsDiv = document.getElementById(`recipe-${index}`);
+      const listItems = detailsDiv.querySelectorAll("ul li");
+      listItems.forEach(li => {
+        const original = li.getAttribute("data-meas");
+        const ing = li.getAttribute("data-ing");
+        const { amount, unit } = parseMeasurementParts(original);
+
+        if (amount != null) {
+          const scaled = Math.round((amount * scale + Number.EPSILON) * 100) / 100;
+          li.innerHTML = `${scaled} ${unit} – ${ing}`;
+        } else {
+          li.innerHTML = `${original} – ${ing} (x${scale} – could not increment)`;
+        }
+      });
+    }
+
+    function resetScale(index) {
+      // Reset servings
+      const servingsEl = document.getElementById(`servings-${index}`);
+      const originalServings = servingsEl.dataset.originalServings;
+      servingsEl.textContent = originalServings;
+
+      // Reset ingredients
+      const detailsDiv = document.getElementById(`recipe-${index}`);
+      const listItems = detailsDiv.querySelectorAll("ul li");
+      listItems.forEach(li => {
+        const original = li.getAttribute("data-meas");
+        const ing = li.getAttribute("data-ing");
+        li.innerHTML = `${original} – ${ing}`;
+      });
+
+      // Reset scale input
+      const scaleInput = document.getElementById(`scale-factor-${index}`);
+      scaleInput.value = "1";
+    }
+
+    const allRecipesData = {
+      {% for i in range(recipes.name|length if recipes.name else 0) %}
+        "{{ recipes['name'][i] }}": {
+          ingredients: {{ recipes['ingredients'][i] | tojson }},
+          measurements: {{ recipes['measurements'][i] | tojson }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    };
+
+    // Your weekly meal plan data to be used in JS
+    const weeklyMealPlan = {
+      {% for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
+        "{{ day }}": {
+          breakfast: {{ meal_plan[day][0] | tojson }},
+          lunch: {{ meal_plan[day][1] | tojson }},
+          dinner: {{ meal_plan[day][2] | tojson }},
+          sideDish: {{ meal_plan[day][3] | tojson }},
+          dessert: {{ meal_plan[day][4] | tojson }},
+          snack: {{ meal_plan[day][5] | tojson }}
+        }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    };
+    function aggregateIngredientsFromMealPlan() {
+      const aggregated = {}; // { ingredient: { amount, units } }
+
+      function addIngredient(amount, unit, ingredient) {
+        if (!aggregated[ingredient]) {
+          aggregated[ingredient] = { amount: 0, units: unit };
+        }
+        if (aggregated[ingredient].units === unit) {
+          aggregated[ingredient].amount += amount;
+        } else {
+          aggregated[ingredient].units += ` + ${unit}`;
+          aggregated[ingredient].amount = null;
+        }
+      }
+
+      for (const day in weeklyMealPlan) {
+        const meals = weeklyMealPlan[day];
+        for (const mealType in meals) {
+          const recipeList = meals[mealType];
+          if (Array.isArray(recipeList)) {
+            recipeList.forEach(recipeName => {
+              const recipe = allRecipesData[recipeName];
+              if (!recipe) return;
+              recipe.ingredients.forEach((ing, idx) => {
+                const meas = recipe.measurements[idx];
+                const { amount, unit } = parseMeasurementParts(meas);
+                addIngredient(amount ?? 0, unit, ing);
+              });
+            });
+          }
+        }
+      }
+
+      return aggregated;
+    }
+
+        
+    function parseAmount(meas) {
+      const match = meas.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(\.\d+)?)/);
+      if (!match) return null;
+      const numberPart = match[0];
+      let value;
+      if (numberPart.includes('/')) {
+        if (numberPart.includes(' ')) {
+          const [whole, frac] = numberPart.split(' ');
+          const [num, den] = frac.split('/');
+          value = parseInt(whole) + parseInt(num) / parseInt(den);
+        } else {
+          const [num, den] = numberPart.split('/');
+          value = parseInt(num) / parseInt(den);
+        }
+      } else {
+        value = parseFloat(numberPart);
+      }
+      return value;
+    }
+
+
+    function renderSuggestions() {
+      const container = document.getElementById('suggestions-container');
+      container.innerHTML = ''; // Clear
+
+      const aggregated = aggregateIngredientsFromMealPlan();
+      if (Object.keys(aggregated).length === 0) {
+        container.textContent = "No suggestions available. Add meals to your plan first.";
+        return;
+      }
+
+      const ul = document.createElement('ul');
+
+      for (const ing in aggregated) {
+        const { amount, units } = aggregated[ing];
+        const displayAmount = amount != null ? Math.round(amount * 100) / 100 : '';
+        const amountText = amount != null ? `${displayAmount} ${units}`.trim() : units || '';
+
+      
+
+        if (isItemInGroceryList(ing)) continue;  
+
+        const li = document.createElement('li');
+        li.style.marginBottom = '6px';
+        li.id = `suggested-${ing.replace(/\s+/g, '-')}`;
+
+        const span = document.createElement('span');
+        span.textContent = `${amountText} – ${ing}`;
+        span.style.opacity = '0.5';
+        li.appendChild(span);
+
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+';
+        addBtn.style.marginLeft = '10px';
+        addBtn.className = 'add_row-btn';
+        addBtn.type = 'button';
+        addBtn.onclick = () => {
+          addSingleSuggestionToGroceryList(ing, amountText);
+          li.remove();
+        };
+
+        li.appendChild(addBtn);
+        ul.appendChild(li);
+      }
+
+      container.appendChild(ul);
+    }
+
+    function normalize(text) {
+      return (text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function isItemInGroceryList(ingredient) {
+      const rows = document.querySelectorAll('#grocery-table tbody tr');
+
+      const normalizedIng = normalize(ingredient);
+
+      return Array.from(rows).some(row => {
+        const itemInput = row.querySelector('input[name="item"]');
+        const item = normalize(itemInput?.value);
+        return item === normalizedIng;
+      });
+    }
+
+    function addSingleSuggestionToGroceryList(ingredient, amountText) {
+      const tableBody = document.querySelector('#grocery-table tbody');
+
+      const row = document.createElement('tr');
+
+      const itemTd = document.createElement('td');
+      const itemInput = document.createElement('input');
+      itemInput.type = 'text';
+      itemInput.name = 'item';
+      itemInput.value = ingredient;
+      itemTd.appendChild(itemInput);
+      row.appendChild(itemTd);
+
+      const qtyTd = document.createElement('td');
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'text';
+      qtyInput.name = 'amount';
+      qtyInput.value = amountText;
+      qtyTd.appendChild(qtyInput);
+      row.appendChild(qtyTd);
+
+      const storeTd = document.createElement('td');
+      const storeSelect = document.createElement('select');
+      storeSelect.name = 'store_select';
+      ['','Costco','Walmart','WinCo','Target',"Sam's Club",'Raley\'s','Safeway',"Trader Joe's",'Whole Foods','Other'].forEach(store => {
+        const opt = document.createElement('option');
+        opt.value = store;
+        opt.textContent = store || 'Select store...';
+        storeSelect.appendChild(opt);
+      });
+      storeTd.appendChild(storeSelect);
+      row.appendChild(storeTd);
+
+      
+      const typeTd = document.createElement('td');
+      const typeSelect = document.createElement('select');
+      typeSelect.name = 'type_select';
+      ['','Produce','Meat','Dairy','Bakery','Frozen','Canned','Pantry','Beverages','Other'].forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type || 'Select type...';
+        typeSelect.appendChild(opt);
+      });
+      typeTd.appendChild(typeSelect);
+      row.appendChild(typeTd);
+
+      tableBody.appendChild(row);
+
+      const removeTd = document.createElement("td");
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-row-btn";
+      removeBtn.textContent = "✕";
+      removeBtn.onclick = () => {
+        row.remove();  // Remove from grocery table
+        restoreSuggestion(ingredient, amountText);  // Re-add to suggestion list
+      };
+      removeTd.appendChild(removeBtn);
+      row.appendChild(removeTd);
+
+      tableBody.appendChild(row);
+    }
+    function addAllSuggestionsToGroceryList() {
+      const suggestions = document.querySelectorAll('#suggestions-container li');
+
+      suggestions.forEach(li => {
+        const text = li.querySelector('span')?.textContent;
+        if (!text.includes('–')) return;
+
+        const [amountText, ingredient] = text.split('–').map(str => str.trim());
+        addSingleSuggestionToGroceryList(ingredient, amountText);
+        li.remove();
+      });
+    }
+
+    function restoreSuggestion(ingredient, amountText) {
+      const container = document.getElementById('suggestions-container');
+      const ul = container.querySelector('ul') || document.createElement('ul');
+      if (!ul.parentElement) container.appendChild(ul);
+
+      const li = document.createElement('li');
+      li.style.marginBottom = '6px';
+      li.id = `suggested-${ingredient.replace(/\s+/g, '-')}`;
+
+      const span = document.createElement('span');
+      span.textContent = `${amountText} – ${ingredient}`;
+      span.style.opacity = '0.5';
+      li.appendChild(span);
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+';
+      addBtn.style.marginLeft = '10px';
+      addBtn.className = 'add_row-btn';
+      addBtn.type = 'button';
+      addBtn.onclick = () => {
+        addSingleSuggestionToGroceryList(ingredient, amountText);
+        li.remove();
+      };
+
+      li.appendChild(addBtn);
+      ul.appendChild(li);
+    }
+
+    function addSuggestionToGroceryList(item, amount, button) {
+      const tbody = document.querySelector("#grocery-table tbody");
+
+      const row = document.createElement("tr");
+
+      
+      const itemTd = document.createElement("td");
+      const itemInput = document.createElement("input");
+      itemInput.type = "text";
+      itemInput.name = "item";
+      itemInput.value = item;
+      itemTd.appendChild(itemInput);
+      row.appendChild(itemTd);
+
+      
+      const amtTd = document.createElement("td");
+      const amtInput = document.createElement("input");
+      amtInput.type = "text";
+      amtInput.name = "amount";
+      amtInput.value = amount;
+      amtTd.appendChild(amtInput);
+      row.appendChild(amtTd);
+
+      
+      const storeTd = document.createElement("td");
+      const storeSelect = document.createElement("select");
+      storeSelect.name = "store_select";
+      storeSelect.onchange = function () {
+        handleStoreSelection(this);
+      };
+      const stores = ["", "Costco", "Walmart", "WinCo", "Target", "Sam's Club", "Raley's", "Safeway", "Trader Joe's", "Whole Foods", "Other"];
+      for (const s of stores) {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.textContent = s || "Select store...";
+        storeSelect.appendChild(opt);
+      }
+      const storeInput = document.createElement("input");
+      storeInput.type = "text";
+      storeInput.name = "store";
+      storeInput.style.display = "none";
+      storeInput.placeholder = "Enter store name";
+      storeTd.appendChild(storeSelect);
+      storeTd.appendChild(storeInput);
+      row.appendChild(storeTd);
+
+      
+      const typeTd = document.createElement("td");
+      const typeSelect = document.createElement("select");
+      typeSelect.name = "type_select";
+      typeSelect.onchange = function () {
+        handleTypeSelection(this);
+      };
+      const types = ["", "Produce", "Meat", "Dairy", "Bakery", "Frozen", "Canned", "Pantry", "Beverages", "Other"];
+      for (const t of types) {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t || "Select type...";
+        typeSelect.appendChild(opt);
+      }
+      const typeInput = document.createElement("input");
+      typeInput.type = "text";
+      typeInput.name = "type";
+      typeInput.style.display = "none";
+      typeInput.placeholder = "Enter type";
+      typeTd.appendChild(typeSelect);
+      typeTd.appendChild(typeInput);
+      row.appendChild(typeTd);
+
+     
+      const removeTd = document.createElement("td");
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-row-btn";
+      removeBtn.textContent = "✕";
+      removeBtn.onclick = () => row.remove();
+      removeTd.appendChild(removeBtn);
+      row.appendChild(removeTd);
+
+      tbody.appendChild(row);
+
+      
+      if (button) {
+        const suggestion = button.parentElement;
+        suggestion.remove();
+
+      
+      }
+    }
+
+    function exportGroceryListToTxt() {
+      fetch('/get_grocery_lists')
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to fetch saved grocery data');
+          return response.json();
+        })
+        .then(data => {
+          const lists = data.lists;
+          if (!lists || lists.length === 0 || !lists[0].items || lists[0].items.length === 0) {
+            alert('No saved grocery items to export!');
+            return;
+          }
+          const items = lists[0].items;
+
+          let textContent = '';
+          items.forEach(itemObj => {
+            const item = itemObj.item || '';
+            const quantity = itemObj.quantity || '';
+            const store = itemObj.store || '';
+            const type = itemObj.type || '';
+            textContent += `• ${item} - ${quantity} [${store}, ${type}]\n`;
+          });
+
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'saved_grocery_list.txt';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        })
+        .catch(error => {
+          console.error('Error exporting saved grocery list:', error);
+          alert('Could not export saved grocery list.');
+        });
+    }
+
+    
+
+    
+
+    // Theme change functionality
+    function handleThemeChange(theme) {
+      // Remove all theme classes
+      document.body.classList.remove('dark-theme', 'cookbook', 'pale-orange', 'lime-green', 'electric-blue', 'lavender-purple', 'fuchsia-pink');
+
+      // Add the selected theme class (except for light which is default)
+      if (theme !== 'light') {
+        if (theme === 'dark') {
+          document.body.classList.add('dark-theme');
+        } else {
+          document.body.classList.add(theme);
+        }
+      }
+
+      // Save theme preference to localStorage
+      localStorage.setItem('selectedTheme', theme);
+    }
+
+    // Load saved theme preference on page load
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('selectedTheme') || 'light';
+      const themeSelect = document.getElementById('theme-select');
+
+      if (themeSelect) {
+        themeSelect.value = savedTheme;
+      }
+
+      // Apply the saved theme
+      handleThemeChange(savedTheme);
     }
 
     // Highlight active sidebar link
     document.addEventListener('DOMContentLoaded', () => {
+      // Load saved theme
+      loadTheme();
+
+      // Auto-load grocery list
+      loadGroceryLists();
+
       const sidebarLinks = document.querySelectorAll('.sidebar a');
       sidebarLinks.forEach(link => {
         link.addEventListener('click', () => {
@@ -282,9 +928,34 @@
       <nav class="sidebar">
         <a href="#input">Input Recipes</a>
         <a href="#view">View Recipes</a>
-        
+
         <a href="#meal">Meal Plan</a>
         <a href="#grocery">Grocery List</a>
+         {% with messages = get_flashed_messages(with_categories=true) %}
+           {% if messages %}
+             <ul class="flashes">
+               {% for category, message in messages %}
+                 <li class="{{ category }}">{{ message }}</li>
+               {% endfor %}
+             </ul>
+           {% endif %}
+         {% endwith %}
+
+        <div class="sidebar-spacer"></div>
+        <div class="theme-dropdown">
+          <select id="theme-select" onchange="handleThemeChange(this.value)">
+            <option value="light">Light Mode</option>
+            <option value="dark">Dark Mode</option>
+            <option value="cookbook">Cookbook</option>
+            <option value="pale-orange">Pale Orange</option>
+            <option value="lime-green">Lime Green</option>
+            <option value="electric-blue"">Electric Blue</option>
+            <option value="lavender-purple">Lavender Purple</option>
+            <option value="fuchsia-pink">Fuchsia Pink</option>
+
+          </select>
+        </div>
+
       </nav>
 
       <!--Content Area-->
@@ -292,9 +963,16 @@
 
         <!--Input Recipes-->
         <div id="input" class="section">
+
           <h2>Input Recipes</h2>
+          <label for="import-url" style="margin-bottom: 10px; font-weight: bold;">Import from URL (not yet reliable, ONLY compatible with allrecipes.com for now):</label>
+          <input type="text" class="import-url" id="import-url" placeholder="Paste recipe URL here"><br />
+          <button class="import-btn" type="button" onclick="importRecipe()">Import Recipe</button>
+
+          <br><br>
                     <form action = "/submit" method = "post" onsubmit = "calculateSteps()">
-            <label for="name">Recipe Name:</label><br />
+
+            <label for="name">Recipe Name:</label>
             <input type="text" name = "name" required><br /><br />
 
 
@@ -311,16 +989,21 @@
                 <tr><td><input type="text" name = "measurements" /></td><td><input type="text" name = "ingredients" /></td></tr>
               </tbody>
             </table>
-            <button type="button" onclick="addIngredientRow()">Add Row</button><br /><br />
+            <button title="Add ingredient row" type="button" class="add_row-btn" onclick="addIngredientRow()">+</button>
 
-            <label>Instructions:</label><br />
+                      <br /><br /><br />
+
+            <label>Instructions:</label>
             <table id="instructions-table" style="width: 100%; margin-bottom: 15px;">
               <tbody>
                 <tr><td><input type="text" name = "steps" placeholder="e.g., Preheat oven to 350°F" style="width: 100%;" /></td></tr>
               </tbody>
             </table>
-            <button type="button" onclick="addInstructionRow()">Add Instruction Row</button><br /><br />
-            <label for="mealType">Recipe Type:</label><br />
+            <button title="Add instruction row" type="button" class="add_row-btn" onclick="addInstructionRow()">+</button>
+
+                      <br /><br /><br />
+
+            <label for="mealType">Recipe Type:</label>
               <select name="mealType" required>
                 <option value="">Select a type...</option>
                 <option value="Breakfast">Breakfast</option>
@@ -329,25 +1012,37 @@
                 <option value="Dessert">Dessert</option>
                 <option value="Snack">Snack</option>
                 <option value="Side Dish">Side Dish</option>
-              </select><br /><br />
+              </select>
 
-              <label for="description">Description:</label><br />
-              <textarea name="description" placeholder="Brief description of the recipe"></textarea><br /><br />
+                      <br /><br /><br />
 
-              <label for="servings">Servings:</label><br />
-              <input type="number" name="servings" placeholder="4" min="1"><br /><br />
+              <label for="description">Description:</label>
+              <textarea name="description" placeholder="Brief description of the recipe"></textarea>
 
-              <label for="time">Total Cook Time:</label><br />
-              <input type="text" name="time" placeholder="e.g., 30 minutes"><br /><br />
+                      <br /><br /><br />
 
-              <label for="notes">Notes:</label><br />
-              <textarea name="notes" placeholder="Any additional notes"></textarea><br /><br />
+              <label for="servings">Servings:</label>
+              <input type="number" name="servings" placeholder="4" min="1">
 
-              <label for="freezerMealTF">Freezer Meal?</label><br />
+                      <br /><br /><br />
+
+              <label for="time">Total Cook Time:</label>
+              <input type="text" name="time" placeholder="e.g., 30 minutes">
+
+                      <br /><br /><br />
+
+              <label for="notes">Notes:</label>
+              <textarea name="notes" placeholder="Any additional notes"></textarea>
+
+                      <br /><br /><br />
+
+              <label for="freezerMealTF">Freezer Meal?</label>
               <select name="freezerMealTF">
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
-              </select><br /><br />
+              </select>
+
+                      <br /><br /><br />
 
               <input type="hidden" name="numOfSteps" id="numOfSteps" value="1">
 
@@ -360,27 +1055,177 @@
         <div id="view" class="section">
           <h2>View Recipes</h2>
           <p>This is where you can browse and filter all your saved recipes. Click on a card to flip it and add it to your meal plan!</p><br />
+          <div class="filters">
+            <label>
+              Meal Type:
+              <select id="filter-meal-type">
+                <option value="">All</option>
+                <option value="Breakfast">Breakfast</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Dinner">Dinner</option>
+                <option value="Side Dish">Side Dish</option>
+                <option value="Dessert">Dessert</option>
+                <option value="Snack">Snack</option>
+              </select>
+            </label>
+
+            <label>
+              Freezer Meal:
+              <select id="filter-freezer">
+                <option value="">All</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </label>
+
+            <label>
+              Max Cook Time (mins):
+              <input type="number" id="filter-time" placeholder="e.g. 30" min="0" />
+            </label>
+
+            <button onclick="applyRecipeFilters()">Apply Filters</button>
+          </div>
 
           <div class="recipe-cards-container">
-            {% for i in range(recipes.shape[0]) %}
-            <div class="recipe-card" onclick="flipCard({{ i }})">
+            {% for i in range(recipes.name|length if recipes.name else 0) %}
+            <div class="recipe-card"
+              data-meal-type="{{ recipes['mealType'][i]|lower }}"
+              data-freezer="{{ recipes['freezerMealTF'][i]|lower }}"
+              data-cook-time="{{ recipes['time'][i]|replace(' mins', '')|int }}">
               <div class="card-inner" id="card-inner-{{ i }}">
                 <div class="card-front">
                   <div class="recipe-content">
                     <h3>{{ recipes['name'][i] }}</h3>
                     <p><strong>Description:</strong> {{ recipes['description'][i] }}</p>
                     <p><strong>Type:</strong> {{ recipes['mealType'][i] }}</p>
-                    <p><strong>Servings:</strong> {{ recipes['servings'][i] }}</p>
+                    <p><strong>Servings:</strong> <span id="servings-{{ i }}" data-original-servings="{{ recipes['servings'][i] }}">{{ recipes['servings'][i] }}</span></p>
                     <p><strong>Cook Time:</strong> {{ recipes['time'][i] }}</p>
                     <p><strong>Freezer Meal:</strong> {{ recipes['freezerMealTF'][i] }}</p>
                     
+                    <div class="rating-section">
+                      <p><strong>Rating:</strong> 
+                        <span class="stars">
+                          {% set avg_rating = recipes['average_rating'][i] %}
+                          {% for star in range(5) %}
+                            {% if star < avg_rating %}
+                              ★
+                            {% else %}
+                              ☆
+                            {% endif %}
+                          {% endfor %}
+                        </span>
+                        {% if recipes['average_rating'][i] > 0 %}
+                          ({{ "%.1f"|format(recipes['average_rating'][i]) }}/5 - {{ recipes['ratings'][i]|length }} review{{ 's' if recipes['ratings'][i]|length != 1 else '' }})
+                        {% else %}
+                          (No ratings yet)
+                        {% endif %}
+                      </p>
+                      
+                      <form action="/add_rating" method="post" class="rating-form" onclick="event.stopPropagation();">
+                        <input type="hidden" name="recipe_name" value="{{ recipes['name'][i] }}">
+                        <label>Rate this recipe:</label>
+                        <div class="star-rating">
+                          <input type="radio" name="rating" value="5" id="star5-{{ i }}" onclick="enableSubmit({{ i }})">
+                          <label for="star5-{{ i }}">★</label>
+                          <input type="radio" name="rating" value="4" id="star4-{{ i }}" onclick="enableSubmit({{ i }})">
+                          <label for="star4-{{ i }}">★</label>
+                          <input type="radio" name="rating" value="3" id="star3-{{ i }}" onclick="enableSubmit({{ i }})">
+                          <label for="star3-{{ i }}">★</label>
+                          <input type="radio" name="rating" value="2" id="star2-{{ i }}" onclick="enableSubmit({{ i }})">
+                          <label for="star2-{{ i }}">★</label>
+                          <input type="radio" name="rating" value="1" id="star1-{{ i }}" onclick="enableSubmit({{ i }})">
+                          <label for="star1-{{ i }}">★</label>
+                        </div>
+                        <button type="submit" class="submit-rating-btn" disabled id="submit-rating-{{ i }}">Submit Rating</button>
+                      </form>
+                    </div>
+
                     <button class="toggle-btn" onclick="event.stopPropagation(); toggleRecipe('recipe-{{ i }}', this)">Show more</button>
+                    <button class="edit-btn" onclick="event.stopPropagation(); toggleEditForm({{ i }})">Edit</button>
+                    <button class="flip-btn" onclick="event.stopPropagation(); flipCard({{ i }})">Add to Meal Plan</button>
+                    <form action="{{ url_for('delete_recipe') }}" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this recipe?');">
+                      <input type="hidden" name="recipe_name" value="{{ recipes['name'][i] }}">
+                      <button type="submit" class="delete-btn" onclick="event.stopPropagation();">Delete</button>
+                    </form>
+                    <div id="edit-form-{{ i }}" class="edit-form hidden" style="margin-top:1rem; border: 1px solid #ccc; padding: 1rem;">
+                      <form action="{{ url_for('edit_recipe', recipe_name=recipes['name'][i]) }}" method="post" onsubmit="return validateEditForm({{ i }})">
+                        <label>
+                          Name:<br />
+                          <input type="text" name="name" value="{{ recipes['name'][i] }}" required />
+                        </label><br />
+
+                        <label>
+                          Meal Type:<br />
+                          <select name="mealType" required>
+                            {% set meal_types = ['Breakfast', 'Lunch', 'Dinner', 'Side Dish', 'Dessert', 'Snack'] %}
+                            {% for mt in meal_types %}
+                              <option value="{{ mt }}" {% if mt == recipes['mealType'][i] %}selected{% endif %}>{{ mt }}</option>
+                            {% endfor %}
+                          </select>
+                        </label><br />
+
+                        <label>
+                          Description:<br />
+                          <textarea name="description" rows="2">{{ recipes['description'][i] }}</textarea>
+                        </label><br />
+
+                        <label>
+                          Servings:<br />
+                          <input type="number" name="servings" min="1" value="{{ recipes['servings'][i] }}" />
+                        </label><br />
+
+                        <label>
+                          Cook Time:<br />
+                          <input type="text" name="time" value="{{ recipes['time'][i] }}" />
+                        </label><br />
+
+                        <label>
+                          Freezer Meal:<br />
+                          <select name="freezerMealTF" required>
+                            <option value="Yes" {% if recipes['freezerMealTF'][i] == "Yes" %}selected{% endif %}>Yes</option>
+                            <option value="No" {% if recipes['freezerMealTF'][i] == "No" %}selected{% endif %}>No</option>
+                          </select>
+                        </label><br />
+
+                        <label>Ingredients & Measurements:</label><br />
+                        <div id="ingredients-container-{{ i }}">
+                          {% for ing, meas in zip(recipes['ingredients'][i], recipes['measurements'][i]) %}
+                            <div class="inline-inputs" style="margin-bottom: 5px;">
+                              <input type="text" name="ingredients" placeholder="Ingredient" value="{{ ing }}" required style="width: 45%; margin-right: 5px;" />
+                              <input type="text" name="measurements" placeholder="Measurement" value="{{ meas }}" required style="width: 45%;" />
+                              <button type="button" onclick="removeIngredient(this)">X</button>
+                            </div>
+                          {% endfor %}
+                        </div>
+                        <button title="Add ingredient row" type="button" class="add_row-btn" onclick="addIngredient({{ i }})">+</button><br /><br />
+
+                        <label>Steps:</label><br />
+                        <div id="steps-container-{{ i }}">
+                          {% for step in recipes['steps'][i] %}
+                            <div class="list-item" style="margin-bottom: 5px;">
+                              <textarea name="steps" rows="2" required style="width: 90%;">{{ step }}</textarea>
+                              <button type="button" onclick="removeStep(this)">X</button>
+                            </div>
+                          {% endfor %}
+                        </div>
+                        <button title="Add instruction row" type="button" class="add_row-btn" onclick="addStep({{ i }})">+</button><br /><br />
+
+                        <button type="submit">Update Recipe</button>
+                        <button type="button" onclick="toggleEditForm({{ i }})" style="margin-left: 1rem;">Cancel</button>
+                      </form>
+                    </div>
 
                     <div id="recipe-{{ i }}" class="recipe-details hidden">
+                      <form onsubmit="event.preventDefault(); scaleRecipe({{ i }})" style="margin-top: 1rem;">
+                        <label for="scale-factor-{{ i }}">Scale Recipe (x):</label>
+                        <input type="number" id="scale-factor-{{ i }}" min="0.5" max="100" step="0.5" value="1" />
+                        <button type="submit">Apply Scale</button>
+                        <button type="button" onclick="resetScale({{ i }})">Reset</button>
+                      </form>
                       <h4>Ingredients:</h4>
                       <ul>
                         {% for ing, meas in zip(recipes['ingredients'][i], recipes['measurements'][i]) %}
-                          <li>{{ meas }} – {{ ing }}</li>
+                        <li data-meas="{{ meas }}" data-ing="{{ ing }}">{{ meas }} – {{ ing }}</li>
                         {% endfor %}
                       </ul>
 
@@ -397,9 +1242,10 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <div class="card-back">
                   <h3>What day do you want this recipe?</h3>
+                  <button class="cancel-btn" onclick="event.stopPropagation(); flipCard({{ i }})">Cancel</button>
                   <div class="days-container">
                     <form action = "/planner" method = "post" style="display: contents;">
                       <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('monday-{{ i }}', this, {{ i }})">Monday</button>
@@ -411,7 +1257,7 @@
                       <button type="button" class="day-button" onclick="event.stopPropagation(); toggleDay('sunday-{{ i }}', this, {{ i }})">Sunday</button>
                     </form>
                   </div>
-                  
+
                   <div id="monday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Monday">
@@ -424,7 +1270,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="tuesday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Tuesday">
@@ -437,7 +1283,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="wednesday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Wednesday">
@@ -450,7 +1296,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="thursday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Thursday">
@@ -463,7 +1309,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="friday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Friday">
@@ -476,7 +1322,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="saturday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Saturday">
@@ -489,7 +1335,7 @@
                       <button type="submit" name="meal" value="snack" onclick="event.stopPropagation();">Snack</button>
                     </form>
                   </div>
-                  
+
                   <div id="sunday-{{ i }}" class="meal-buttons" style="display: none;">
                     <form action="/planner" method="post">
                       <input type="hidden" name="day" value="Sunday">
@@ -508,7 +1354,7 @@
             {% endfor %}
           </div>
         </div>
-      
+
 
         <!--Meal Plan-->
         <div id="meal" class="section">
@@ -530,26 +1376,37 @@
             </thead>
             <tbody>
               {% for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
-              <tr>
-                <td>{{ day.capitalize() }}</td>
-                <td>{{ meal_plan[day][0] }}</td>
-                <td>{{ meal_plan[day][1] }}</td>
-                <td>{{ meal_plan[day][2] }}</td>
-                <td>{{ meal_plan[day][3] }}</td>
-                <td>{{ meal_plan[day][4] }}</td>
-                <td>{{ meal_plan[day][5] }}</td>
-                <td>
-                  <form action="/clear_day" method="post" style="display:inline;">
-                    <input type="hidden" name="day" value="{{ day }}">
-                    <button type="submit">Clear</button>
-                  </form>
-                </td>
-              </tr>
+                <tr>
+                  <td class="day-label">{{ day.capitalize() }}</td>
+                  {% for meal in meal_types %}
+                    <td class="meal-cell">
+                      <div>
+                        {% for recipe in meal_plan[day][loop.index0] %}
+                          <div>{{ recipe }}</div>
+                          {% if not loop.last %}
+                            <div style="text-align: center;">—</div>
+                          {% endif %}
+                        {% endfor %}
+                      </div>
+                      <form action="/clear_meal" method="post" class="clear-meal-form">
+                        <input type="hidden" name="day" value="{{ day }}">
+                        <input type="hidden" name="meal" value="{{ meal }}">
+                        <button type="submit" class="clear-btn-small">Clear</button>
+                      </form>
+                    </td>
+                  {% endfor %}
+                  <td>
+                    <form action="/clear_day" method="post">
+                      <input type="hidden" name="day" value="{{ day }}">
+                      <button type="submit" class="clear-btn-small">Clear</button>
+                    </form>
+                  </td>
+                </tr>
               {% endfor %}
             </tbody>
           </table>
           <form action = "/reset_week" method="post" style="display: inline;">
-            <form action="/reset_week" method="post" style="display:inline;">
+            
                 <button type="submit">Reset Week</button>
             </form>
 
@@ -560,20 +1417,21 @@
                 <div id="grocery" class="section">
           <h2>Grocery List</h2>
           <form action="/add_grocery" method="post">
-            <table id="grocery-table" style="width: 100%; margin-bottom: 15px;">
+            <table id="grocery-table" style="width: 100%; margin-bottom: 0px;">
               <thead>
                 <tr>
-                  <th style="text-align:left;">Item</th>
-                  <th style="text-align:left;">Quantity</th>
-                  <th style="text-align:left;">Store</th>
+                  <th style="text-align:left">Item</th>
+                  <th style="text-align:left">Quantity</th>
+                  <th style="text-align:left">Store</th>
+                  <th style="text-align:left">Type</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td><input type="text" name="item" placeholder="e.g., Eggs" onkeypress="handleGroceryEnter(event)" /></td>
-                  <td><input type="text" name="amount" placeholder="e.g., 1 dozen" onkeypress="handleGroceryEnter(event)" /></td>
+                  <td><input type="text" name="item" placeholder="e.g., Eggs" /></td>
+                  <td><input type="text" name="amount" placeholder="e.g., 1 dozen" /></td>
                   <td>
-                    <select onchange="handleStoreSelection(this)" onkeypress="handleGroceryEnter(event)">
+                    <select name="store_select" onchange="handleStoreSelection(this)">
                       <option value="">Select store...</option>
                       <option value="Costco">Costco</option>
                       <option value="Walmart">Walmart</option>
@@ -586,22 +1444,62 @@
                       <option value="Whole Foods">Whole Foods</option>
                       <option value="Other">Other</option>
                     </select>
-                    <input type="text" name="store" style="display: none;" placeholder="Enter store name" onkeypress="handleGroceryEnter(event)" />
+                    <input type="text" name="store" style="display: none;" placeholder="Enter store name" />
+                  </td>
+                  <td>
+                    <select name="type_select" onchange="handleTypeSelection(this)">
+                      <option value="">Select type...</option>
+                      <option value="Produce">Produce</option>
+                      <option value="Meat">Meat</option>
+                      <option value="Dairy">Dairy</option>
+                      <option value="Bakery">Bakery</option>
+                      <option value="Frozen">Frozen</option>
+                      <option value="Canned">Canned</option>
+                      <option value="Pantry">Pantry</option>
+                      <option value="Beverages">Beverages</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <input type="text" name="type" style="display: none;" placeholder="Enter type" />
+                  </td>
+                  <td>
+                    <button type="button" class="remove-row-btn" onclick="removeGroceryRow(this)">✕</button>
                   </td>
                 </tr>
               </tbody>
             </table>
             
-            <div style="margin-bottom: 20px;">
-              <button type="button" onclick="saveGroceryList()">Save List</button>
-              <button type="button" onclick="viewGroceryLists()">View Lists</button>
+            <div style="margin-bottom: 15px;">
+              <button class="add_row-btn" type="button" style="margin-right: 30px; margin-left: 30px;" onclick="addGroceryRow()">+</button>
+              <button type="submit" onclick="renderSuggestions()">Save Items</button>
+              <br /><br />
+              <h3>Suggested Ingredients from Meal Plan</h3>
+              <button type="button" id="toggle-suggestions-btn" onclick="toggleSuggestions()">Show Suggestions</button>
+              <div id="suggestions-container"  style="display:none; font-style: italic; margin-bottom: 15px;">
+                <!-- Suggestions will be dynamically inserted here -->
+                
+              </div>
+              <button type="button" id="add-suggestions-btn" onclick="addAllSuggestionsToGroceryList()">Add ALL Suggested Ingredients to Grocery List</button>
+              
+              <br />
+              
             </div>
 
           </form>
-          
-          <div id="saved-lists" style="display: none;">
-            <h3>Saved Grocery Lists</h3>
-            <div id="lists-container"></div>
+
+          <div id="saved-lists">
+            <h3>Current Grocery List</h3>
+            <div style="margin-bottom: 10px;">
+              <label><input type="radio" name="displayGroupOption" value="type" checked onchange="renderGrouping()"> Group by Type</label>
+              <label><input type="radio" name="displayGroupOption" value="store" onchange="renderGrouping()"> Group by Store</label>
+              <br />
+              <button class="export-btn" onclick="exportGroceryListToTxt()">Export Grocery List (.txt)</button>
+              <form action="/clear_grocery_list" method="post" style="display: inline;">
+              <button class="clear-btn" type="submit">Clear Grocery List</button>
+              </form>
+            </div>
+            <div id="lists-container">
+              
+            </div>
           </div>
         </div>
 
